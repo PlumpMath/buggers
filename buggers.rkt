@@ -147,21 +147,31 @@
     (struct-copy gamestate w
                  [keysdown (filter (λ (k) (not (key=? a-key k))) keys)])))
 
+;; Precedural Generation Brah!
+(define (make-shitty-tree-icon)
+  (overlay/align/offset
+   "middle" "top"
+   (above (triangle 50 "solid" "darkgreen")
+          (triangle 50 "solid" "darkgreen")
+          (triangle 50 "solid" "darkgreen"))
+   0 10
+   (rectangle 10 150 "solid" "brown")))
+
 (define (start-scene)
   (big-bang (gamestate (list (entity 1 (list (player)
                                              (position '(0 0))
                                              (velocity '(0 0))
-                                             (icon (circle 20 100 "blue"))))
+                                             (icon (make-shitty-tree-icon))))
                              (entity 2 (list (position '(900 502))
-                                             (icon (circle 14 100 "red"))))
+                                             (icon (make-shitty-tree-icon))))
                              (entity 3 (list (position '(807 40))
-                                             (icon (circle 6 100 "green"))))
+                                             (icon (make-shitty-tree-icon))))
                              (entity 4 (list (position '(225 120))
-                                             (icon (circle 88 100 "black")))))
+                                             (icon (make-shitty-tree-icon)))))
                        '())
             (on-tick update-game)
             (on-key keydown)
             (on-release keyup)
             (to-draw render-game)))
 
-(start-scene)
+;;(start-scene)
