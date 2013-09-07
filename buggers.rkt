@@ -17,15 +17,24 @@
 (struct bugger (velocity position icon) #:transparent)
 
 ;; Draw
+(define (compute-screen-position center pos)
+  (let ([x-offset (- (first center) (/ SCREEN-WIDTH 2))]
+        [y-offset (- (second center) (/ SCREEN-HEIGHT 2))])
+    (list (- (first pos) x-offset)
+          (- (second pos) y-offset))))
+
 (define (draw-buggers buggers)
-  (foldl (lambda (b screen)
-           (let* ([img (bugger-icon b)]
-                  [position (bugger-position b)]
-                  [x (first position)]
-                  [y (second position)])
-             (place-image img x y screen)))
-         (empty-scene SCREEN-WIDTH SCREEN-HEIGHT)
-         buggers))
+  (let* ([player (first buggers)]
+         [player-position (bugger-position player)])
+    (foldl (lambda (b screen)
+             (let* ([img (bugger-icon b)]
+                    [position (bugger-position b)]
+                    [draw-at (compute-screen-position player-position position)]
+                    [x (first draw-at)]
+                    [y (second draw-at)])
+               (place-image img x y screen)))
+           (empty-scene SCREEN-WIDTH SCREEN-HEIGHT)
+           buggers)))
 
 (define (render-game state)
   (draw-buggers (gamestate-buggers state)))
@@ -43,7 +52,6 @@
              [else v]))])
     (map (curry * PLAYER-SPEED)
          (foldl apply-directional-velociy '(0 0) keys-down))))
-  
 
 (define (apply-player-velocity w)
   (let* ([ks (gamestate-keysdown w)]
@@ -82,8 +90,11 @@
                  [keysdown (filter (lambda (k) (not (key=? a-key k))) keys)])))
 
 (define (start-scene)
-  (big-bang (gamestate (list (bugger '(0 0) '(0 0) (circle 20 100 "blue")))
-                       '())
+  (big-bang (gamestate (list (bugger '(0 0) '(0 0) (circle 20 100 "blue"))
+                             (bugger '(0 0) '(900 502) (circle 14 100 "red"))
+                             (bugger '(0 0) '(807 40) (circle 6 100 "green"))
+                             (bugger '(0 0) '(225 120) (circle 88 100 "black")))
+                       '()) ;;Keys Down
             (on-tick update-game)
             (on-key keydown)
             (on-release keyup)
