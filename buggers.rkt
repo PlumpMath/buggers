@@ -40,7 +40,12 @@
 
 (define SCREEN-WIDTH 1024)
 (define SCREEN-HEIGHT 600)
-(define PLAYER-SPEED 7)
+;; Hopefully if we use these constants if I get other tiles with a slightly
+;; different isomorphic angle everything will still work.
+(define TILE-X 100)
+(define TILE-Y 80)
+(define TILE-Z -40)
+(define PLAYER-SPEED 1/10)
 
 ;; GameState
 (struct gamestate (entities keysdown) #:transparent)
@@ -86,14 +91,8 @@
 (define (get-player ents)
   (first (get-with-components ents (list player))))
 
-;; System: Draw
-;; Comps: icon, position
-(define (compute-screen-position center pos)
-  (let ([x-offset (- (first center) (/ SCREEN-WIDTH 2))]
-        [y-offset (- (second center) (/ SCREEN-HEIGHT 2))])
-    (list (- (first pos) x-offset)
-          (- (second pos) y-offset))))
 
+;; Noise
 (define (noise-fn x y #:zoom [zoom 10])
   (simplex (/ x zoom) (/ y zoom)))
 
@@ -105,7 +104,36 @@
 ;; 5 accross.
 ;; |_|_|_|_|_|_|_|_|_|_|_|_|_|_|_|_|_|_|_|_|
 ;; |        d         |         d          |
-;; 
+;;
+
+
+;; Draw
+(define (compute-screen-position center pos)
+  (let ([x-offset (- (first center) (/ SCREEN-WIDTH 2))]
+        [y-offset (- (second center) (/ SCREEN-HEIGHT 2))])
+    (list (- (first pos) x-offset)
+          (- (second pos) y-offset))))
+
+;; Need to do some math to scale coordinates. I want position to be a seperate thing
+;; from the spot on the screen.
+;;The conversion is 
+;; 1 in the y direction is 80 pixels
+;; 1 in the x direction is 100 pixels
+;; 1 in the z direction (yep) is 40 pixels in the -y direction.
+
+;; TODO: probably want vectors and vector math for this.
+(define (game-space->screen-space pos)
+  (list (* TILE-X (first pos))
+        (+ (* TILE-Y (second pos))
+           (* TILE-Z (third pos)))))
+
+;; This transformation isn't 1-1 because it's 2 dimentions to 3. This could end up
+;; being an issue when trying to click something that's on various z levels but can
+;; deal with that when I get to it. This function currently assumes everything is at
+;; z = 0
+(define (screen-space->game-space loc)
+  (list (/ (first loc) 100)
+        (/ (second loc) 80)))
 
 (define (draw-icons ents)
   (let* ([player (get-player ents)]
@@ -114,7 +142,12 @@
     (foldl (λ (e screen)
              (let* ([img (icon-val (get-component e icon))]
                     [position (position-val (get-component e position))]
-                    [draw-at (compute-screen-position player-position position)]
+                    
+                    [draw-at
+                     (compute-screen-position
+                      (game-space->screen-space player-position)
+                      (game-space->screen-space position))]
+                    
                     [x (first draw-at)]
                     [y (second draw-at)])
                (place-image img x y screen)))
@@ -130,13 +163,13 @@
   (let ([apply-directional-velociy
          (λ (k v)
            (cond
-             [(key=? k "w") (map + v '(0 -1))]
-             [(key=? k "a") (map + v '(-1 0))]
-             [(key=? k "s") (map + v '(0 1))]
-             [(key=? k "d") (map + v '(1 0))]
+             [(key=? k "w") (map + v '(0 -1 0))]
+             [(key=? k "a") (map + v '(-1 0 0))]
+             [(key=? k "s") (map + v '(0 1 0))]
+             [(key=? k "d") (map + v '(1 0 0))]
              [else v]))])
     (map (curry * PLAYER-SPEED)
-         (foldl apply-directional-velociy '(0 0) keys-down))))
+         (foldl apply-directional-velociy '(0 0 0) keys-down))))
 
 ;; Takes the list of entities, replaces the component of comp-type 
 ;; on the entity with id id with new-component.
@@ -182,6 +215,10 @@
 (define (update-game w)
   ((compose apply-velocity-to-position set-player-velocity) w))
 
+
+;;(define (update-game w)
+;;  w)
+
 ;; KeyPresses
 (define (keydown w a-key)
   (let ([keys (gamestate-keysdown w)])
@@ -203,7 +240,7 @@
    0 10
    (rectangle 10 150 "solid" "brown")))
 
-;; Generate terrain chunks.
+;; Generate terrain chunks, maybe totally not necessary now...
 (define (column arg . args)
   (cond
     [(null? args) arg]
@@ -233,27 +270,38 @@
     (beside grid (apply column c))))
 
 
+;; Start out just generating some entities for the terrain. Don't
+;; worry about making it a system that generates as you walk yet.
+(define (generate-some-initial-terrain)
+  (for*/list ([y (range -5 5)]
+              [x (range -5 5)])
+    ;; TODO: real id because id's will matter soon.
+    (entity "terrain" (list (icon (get-terrain-tile x y))
+                            (position (list x y 0))))))
+
 ;; Initial scene.
 (define test-scene
-  (list
-         (entity "terrain1"
-                 (list (icon (render-terrain-chunk (list -10 -10) 21))
-                       (position '(0 0))))
-         (entity "player"
-                 (list (player)
-                       (position '(0 0))
-                       (velocity '(0 0))
-                       (icon (circle 20 "solid" "blue"))))
-         (entity "tree1"
-                 (list (position '(900 502))
-                       (icon (make-shitty-tree-icon))))
-         (entity "tree2"
-                 (list (position '(807 40))
-                       (icon (make-shitty-tree-icon))))
-         (entity "tree3"
-                 (list (position '(225 120))
-                       (icon (make-shitty-tree-icon))))
-         ))
+  (append
+   (generate-some-initial-terrain)
+   (list
+    (entity "player"
+            (list (player)
+                  (position '(5 5 0))
+                  (velocity '(0 0 0))
+                  (icon (circle 20 "solid" "blue"))))
+    (entity "test-scale-guy"
+            (list (position '(1 2 2))
+                  (icon (circle 20 "solid" "red"))))
+    (entity "tree1"
+            (list (position '(900 502 0))
+                  (icon (make-shitty-tree-icon))))
+    (entity "tree2"
+            (list (position '(807 40 0))
+                  (icon (make-shitty-tree-icon))))
+    (entity "tree3"
+            (list (position '(225 120 0))
+                  (icon (make-shitty-tree-icon))))
+    )))
 
 (define (start-scene)
   (big-bang (gamestate test-scene
@@ -263,4 +311,5 @@
             (on-release keyup)
             (to-draw render-game)))
 
-(start-scene)
+;;(start-scene)
+
