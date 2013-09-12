@@ -40,6 +40,7 @@
 
 (define SCREEN-WIDTH 1024)
 (define SCREEN-HEIGHT 600)
+
 ;; Hopefully if we use these constants if I get other tiles with a slightly
 ;; different isomorphic angle everything will still work.
 (define TILE-X 100)
@@ -133,6 +134,7 @@
                     
                     [x (first draw-at)]
                     [y (second draw-at)])
+               
                (place-image img x y screen)))
            ;;(draw-terrain player-position)
            (empty-scene SCREEN-WIDTH SCREEN-HEIGHT)
@@ -198,10 +200,6 @@
 (define (update-game w)
   ((compose apply-velocity-to-position set-player-velocity) w))
 
-
-;;(define (update-game w)
-;;  w)
-
 ;; KeyPresses
 (define (keydown w a-key)
   (let ([keys (gamestate-keysdown w)])
@@ -232,8 +230,9 @@
   (for*/list ([y (range -10 10)]
               [x (range -10 10)])
     ;; TODO: real id because id's will matter soon.
-    (entity "terrain" (list (icon (get-terrain-tile x y))
-                            (position (list x y 0))))))
+    (entity (string-append "terrain:" (number->string x) "," (number->string y) "," "0")
+            (list (icon (get-terrain-tile x y))
+                  (position (list x y 0))))))
 
 ;; Initial scene.
 (define test-scene
@@ -277,4 +276,3 @@
             (to-draw render-game)))
 
 ;;(start-scene)
-
