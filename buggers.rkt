@@ -96,30 +96,12 @@
 (define (noise-fn x y #:zoom [zoom 10])
   (simplex (/ x zoom) (/ y zoom)))
 
-;; This is uber inneficiant, instead I need to generate a chunk of terrain at
-;; a time and just load it as an entity (I think).
-
-;; Notes
-;; Place-at is the coordinate of the center of the square. This should be every
-;; 5 accross.
-;; |_|_|_|_|_|_|_|_|_|_|_|_|_|_|_|_|_|_|_|_|
-;; |        d         |         d          |
-;;
-
-
 ;; Draw
 (define (compute-screen-position center pos)
   (let ([x-offset (- (first center) (/ SCREEN-WIDTH 2))]
         [y-offset (- (second center) (/ SCREEN-HEIGHT 2))])
     (list (- (first pos) x-offset)
           (- (second pos) y-offset))))
-
-;; Need to do some math to scale coordinates. I want position to be a seperate thing
-;; from the spot on the screen.
-;;The conversion is 
-;; 1 in the y direction is 80 pixels
-;; 1 in the x direction is 100 pixels
-;; 1 in the z direction (yep) is 40 pixels in the -y direction.
 
 ;; TODO: probably want vectors and vector math for this.
 (define (game-space->screen-space pos)
@@ -133,7 +115,8 @@
 ;; z = 0
 (define (screen-space->game-space loc)
   (list (/ (first loc) 100)
-        (/ (second loc) 80)))
+        (/ (second loc) 80)
+        0))
 
 (define (draw-icons ents)
   (let* ([player (get-player ents)]
@@ -240,41 +223,14 @@
    0 10
    (rectangle 10 150 "solid" "brown")))
 
-;; Generate terrain chunks, maybe totally not necessary now...
-(define (column arg . args)
-  (cond
-    [(null? args) arg]
-    [else (overlay/xy (apply column args) 0 -80 arg)]))
-
-(define (get-terrain-tile-for-type terrain-type)
-  (if (equal? terrain-type 'grass)
-      grass-block
-      stone-block))
-
 (define (get-terrain-tile x y)
   (terrain-tile (terrain-value (noise-fn x y))))
-
-(define (render-terrain-chunk upper-left size)
-  (define ul-x (first upper-left))
-  (define ul-y (second upper-left))
-  (define x-range (map (curry + ul-x) (range size)))
-  (define y-range (map (curry + ul-y) (range size)))
-  
-  (define columns
-    (for/list ([y y-range])
-      (for/list ([x x-range])
-        (get-terrain-tile x y))))
-  
-  (for/fold ([grid (apply column (first columns))])
-    ([c (rest columns)])
-    (beside grid (apply column c))))
-
 
 ;; Start out just generating some entities for the terrain. Don't
 ;; worry about making it a system that generates as you walk yet.
 (define (generate-some-initial-terrain)
-  (for*/list ([y (range -5 5)]
-              [x (range -5 5)])
+  (for*/list ([y (range -10 10)]
+              [x (range -10 10)])
     ;; TODO: real id because id's will matter soon.
     (entity "terrain" (list (icon (get-terrain-tile x y))
                             (position (list x y 0))))))
@@ -284,14 +240,23 @@
   (append
    (generate-some-initial-terrain)
    (list
+    (entity "rock"
+            (list (position '(1 1 1))
+                  (icon stone-block)))
+    (entity "rock"
+            (list (position '(2 1 1))
+                  (icon stone-block)))
+    (entity "rock"
+            (list (position '(3 1 1))
+                  (icon stone-block)))
+    (entity "rock"
+            (list (position '(2 1 2))
+                  (icon stone-block)))
     (entity "player"
             (list (player)
                   (position '(5 5 0))
                   (velocity '(0 0 0))
                   (icon (circle 20 "solid" "blue"))))
-    (entity "test-scale-guy"
-            (list (position '(1 2 2))
-                  (icon (circle 20 "solid" "red"))))
     (entity "tree1"
             (list (position '(900 502 0))
                   (icon (make-shitty-tree-icon))))
