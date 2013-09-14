@@ -59,7 +59,7 @@ Grublies
 (define PLAYER-SPEED 1/10)
 
 ;; GameState
-(struct gamestate (entities keysdown rendered-tiles) #:transparent)
+(struct gamestate (entities keysdown terrain-tiles) #:transparent)
 
 ;; Entities
 (struct entity (id components) #:transparent)
@@ -124,25 +124,50 @@ Grublies
         (/ (second loc) 80)
         0))
 
-(define (draw-icons ents)
-  (let* ([player (get-player ents)]
-         [player-position (position-val (get-component player position))]
-         [ents-with-icons (get-with-components ents (list icon))])
+(define DRAW-HEIGHT 10)
+(define DRAW-WIDTH 12)
+
+(define (draw-terrain terrain center-screen)
+  (define center-x (first center-screen))
+  (define center-y (second center-screen))
+  (for*/fold ([canvas (empty-scene SCREEN-WIDTH SCREEN-HEIGHT)])
+      ([y (range (floor (- center-y (/ DRAW-HEIGHT 2)))
+                 (ceiling (+ center-y (/ DRAW-HEIGHT 2))))]
+       [x (range (floor (- center-x (/ DRAW-WIDTH 2)))
+                 (ceiling  (+ center-x (/ DRAW-WIDTH 2))))])
+    (let ([draw-position (compute-screen-position
+                          (game-space->screen-space center-screen)
+                          (game-space->screen-space (list x y 0)))]
+          [img (hash-ref terrain (list x y) #f)])
+      (if img
+          (place-image (hash-ref terrain (list x y))
+                       (first draw-position)
+                       (second draw-position)
+                       canvas)
+        canvas))))
+
+(define (draw-icons ents center-screen canvas)
+  (let ([ents-with-icons (get-with-components ents (list icon))])
     (foldl (λ (e screen)
-             (let* ([img (icon-val (get-component e icon))]
-                    [position (position-val (get-component e position))]
-                    [draw-at
-                     (compute-screen-position
-                      (game-space->screen-space player-position)
-                      (game-space->screen-space position))]                    
-                    [x (first draw-at)]
-                    [y (second draw-at)])
-               (place-image img x y screen)))
-           (empty-scene SCREEN-WIDTH SCREEN-HEIGHT)
+              (let* ([img (icon-val (get-component e icon))]
+                     [position (position-val (get-component e position))]
+                     [draw-at
+                      (compute-screen-position
+                       (game-space->screen-space center-screen)
+                       (game-space->screen-space position))]                    
+                     [x (first draw-at)]
+                     [y (second draw-at)])
+                (place-image img x y screen)))
+           canvas
            ents-with-icons)))
 
 (define (render-game state)
-  (draw-icons (gamestate-entities state)))
+  (let* ([ents (gamestate-entities state)]
+         [terrain (gamestate-terrain-tiles state)]
+         [player (get-player ents)]
+         [player-position (position-val (get-component player position))]
+         [canvas (draw-terrain terrain player-position)])
+    (draw-icons ents player-position canvas)))
 
 ;; Update
 
@@ -164,36 +189,22 @@ Grublies
 
 (define RENDER-DISTANCE 10)
 
-(define (generate-terrain-entity pos)
-  (define x (first pos))
-  (define y (second pos))
-  (entity (string-append "terrain:"
-                         (number->string x) ","
-                         (number->string y) ","
-                         "0")
-          (list (icon (get-terrain-tile x y))
-                (position (list x y 0)))))
-
 ;; Need to generate terrain before the player gets to it.
 (define (generate-terrain w)
-  (define rendered-tiles (gamestate-rendered-tiles w))
+  (define rendered-tiles (gamestate-terrain-tiles w))
   (define player (get-player (gamestate-entities w)))
   (define player-pos (position-val (get-component player position)))
   (define player-pos-x (first player-pos))
   (define player-pos-y (second player-pos))
-  (define render-grid
-    (for*/list ([x (range (- (floor player-pos-x) RENDER-DISTANCE)
+  (define new-rendered-tiles
+    (for*/fold ([tiles rendered-tiles])
+               ([x (range (- (floor player-pos-x) RENDER-DISTANCE)
                           (+ (floor player-pos-x) RENDER-DISTANCE))]
                 [y (range (- (floor player-pos-y) RENDER-DISTANCE)
                           (+ (floor player-pos-y) RENDER-DISTANCE))]
-                #:when (not (set-member? rendered-tiles (list x y))))
-      (list x y)))
-  (struct-copy gamestate w
-               [entities (append (map generate-terrain-entity render-grid)
-                                 (gamestate-entities w))]
-               [rendered-tiles (foldl (λ (pos t) (set-add t pos))
-                                      rendered-tiles
-                                      render-grid)]))
+                #:when (not (hash-has-key? tiles (list x y))))
+      (hash-set tiles (list x y) (get-terrain-tile x y))))
+  (struct-copy gamestate w [terrain-tiles new-rendered-tiles]))
 
 (define (get-player-velocity keys-down)
   (let ([apply-directional-velociy
@@ -306,8 +317,8 @@ Grublies
 (define (start-scene)
   (big-bang (gamestate test-scene
                        '()
-                       (set))
-            (on-tick update-game)
+                       (make-immutable-hash))
+            (on-tick update-game 1/60)
             (on-key keydown)
             (on-release keyup)
             (to-draw render-game)))
