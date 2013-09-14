@@ -1,24 +1,30 @@
 #lang racket
 #| 
-   Working my way through realm of racket for a bit then making a game called
-   lil buggers which is going to be real fun.
+
+Working my way through realm of racket for a bit then making a game called
+lil buggers which is going to be real fun.
+Grublies
+
 |#
-(require 2htdp/universe
+
+(require racket/set         
+         2htdp/universe
          2htdp/image
          2htdp/planetcute
          "noise.rkt")
 
-;;;; PRECEDURAL GENERATION STUFF
+;; PRECEDURAL GENERATION STUFF
+;; ===========================
 
 ;; Seed, not sure how to use it yet.
 (define SEED "someshit")
 
 ;; Takes the perlin noise value and returns
 (define (terrain-value x)
-;;  .75 - 1.0  -> forest
-;;  .01 -  .74 -> grass
-;; -.75 - 0.0  -> sand
-;; -1.0 - -.74 -> water
+  ;;  .75 - 1.0  -> forest
+  ;;  .01 -  .74 -> grass
+  ;; -.75 - 0.0  -> sand
+  ;; -1.0 - -.74 -> water
   (cond [(< x -0.75) 'water]
         [(< x 0) 'sand]
         [(< x .75) 'grass]
@@ -36,20 +42,24 @@
         [(equal? t 'grass)  grass-block]
         [(equal? t 'forest) stone-block]))
 
-;;;; GAMEPLAY STUFF
+(define (noise-fn x y #:zoom [zoom 10])
+  (simplex (/ x zoom) (/ y zoom)))
+
+(define (get-terrain-tile x y)
+  (terrain-tile (terrain-value (noise-fn x y))))
+
+;; GAMEPLAY STUFF
+;; ==============
 
 (define SCREEN-WIDTH 1024)
 (define SCREEN-HEIGHT 600)
-
-;; Hopefully if we use these constants if I get other tiles with a slightly
-;; different isomorphic angle everything will still work.
-(define TILE-X 100)
-(define TILE-Y 80)
-(define TILE-Z -40)
+(define TILE-SCALE-X 100)
+(define TILE-SCALE-Y 80)
+(define TILE-SCALE-Z -40)
 (define PLAYER-SPEED 1/10)
 
 ;; GameState
-(struct gamestate (entities keysdown) #:transparent)
+(struct gamestate (entities keysdown rendered-tiles) #:transparent)
 
 ;; Entities
 (struct entity (id components) #:transparent)
@@ -92,11 +102,6 @@
 (define (get-player ents)
   (first (get-with-components ents (list player))))
 
-
-;; Noise
-(define (noise-fn x y #:zoom [zoom 10])
-  (simplex (/ x zoom) (/ y zoom)))
-
 ;; Draw
 (define (compute-screen-position center pos)
   (let ([x-offset (- (first center) (/ SCREEN-WIDTH 2))]
@@ -106,14 +111,14 @@
 
 ;; TODO: probably want vectors and vector math for this.
 (define (game-space->screen-space pos)
-  (list (* TILE-X (first pos))
-        (+ (* TILE-Y (second pos))
-           (* TILE-Z (third pos)))))
+  (list (* TILE-SCALE-X (first pos))
+        (+ (* TILE-SCALE-Y (second pos))
+           (* TILE-SCALE-Z (third pos)))))
 
 ;; This transformation isn't 1-1 because it's 2 dimentions to 3. This could end up
 ;; being an issue when trying to click something that's on various z levels but can
 ;; deal with that when I get to it. This function currently assumes everything is at
-;; z = 0
+;; z = 0, will need more logic for mapping mouseclick to entity for example.
 (define (screen-space->game-space loc)
   (list (/ (first loc) 100)
         (/ (second loc) 80)
@@ -126,17 +131,13 @@
     (foldl (λ (e screen)
              (let* ([img (icon-val (get-component e icon))]
                     [position (position-val (get-component e position))]
-                    
                     [draw-at
                      (compute-screen-position
                       (game-space->screen-space player-position)
-                      (game-space->screen-space position))]
-                    
+                      (game-space->screen-space position))]                    
                     [x (first draw-at)]
                     [y (second draw-at)])
-               
                (place-image img x y screen)))
-           ;;(draw-terrain player-position)
            (empty-scene SCREEN-WIDTH SCREEN-HEIGHT)
            ents-with-icons)))
 
@@ -144,6 +145,56 @@
   (draw-icons (gamestate-entities state)))
 
 ;; Update
+
+;; Start out just generating some entities for the terrain. Don't
+;; worry about making it a system that generates as you walk yet.
+(define (generate-some-initial-terrain)
+  (for*/list ([y (range -10 10)]
+              [x (range -10 10)])
+    ;; TODO: real id because id's will matter soon.
+    (entity (string-append "terrain:"
+                           (number->string x) ","
+                           (number->string y) ","
+                           "0")
+            (list (icon (get-terrain-tile x y))
+                  (position (list x y 0))))))
+
+;; System
+;; Comps: velocity player
+
+(define RENDER-DISTANCE 10)
+
+(define (generate-terrain-entity pos)
+  (define x (first pos))
+  (define y (second pos))
+  (entity (string-append "terrain:"
+                         (number->string x) ","
+                         (number->string y) ","
+                         "0")
+          (list (icon (get-terrain-tile x y))
+                (position (list x y 0)))))
+
+;; Need to generate terrain before the player gets to it.
+(define (generate-terrain w)
+  (define rendered-tiles (gamestate-rendered-tiles w))
+  (define player (get-player (gamestate-entities w)))
+  (define player-pos (position-val (get-component player position)))
+  (define player-pos-x (first player-pos))
+  (define player-pos-y (second player-pos))
+  (define render-grid
+    (for*/list ([x (range (- (floor player-pos-x) RENDER-DISTANCE)
+                          (+ (floor player-pos-x) RENDER-DISTANCE))]
+                [y (range (- (floor player-pos-y) RENDER-DISTANCE)
+                          (+ (floor player-pos-y) RENDER-DISTANCE))]
+                #:when (not (set-member? rendered-tiles (list x y))))
+      (list x y)))
+  (struct-copy gamestate w
+               [entities (append (map generate-terrain-entity render-grid)
+                                 (gamestate-entities w))]
+               [rendered-tiles (foldl (λ (pos t) (set-add t pos))
+                                      rendered-tiles
+                                      render-grid)]))
+
 (define (get-player-velocity keys-down)
   (let ([apply-directional-velociy
          (λ (k v)
@@ -156,7 +207,7 @@
     (map (curry * PLAYER-SPEED)
          (foldl apply-directional-velociy '(0 0 0) keys-down))))
 
-;; Takes the list of entities, replaces the component of comp-type 
+;; Takes the list of entities, replaces the component of comp-type
 ;; on the entity with id id with new-component.
 ;; Returns a new list of entities.
 ;; This can be used to swap non mutable components but with mutable ones
@@ -164,7 +215,7 @@
 (define (swap-component ents ent-id comp-type new-comp)
   (let* ([ent (first (filter (λ (e) (equal? (entity-id e) ent-id)) ents))]
          [others (filter (λ (e) (not (equal? (entity-id e) ent-id))) ents)]
-         [comps (filter 
+         [comps (filter
                  (λ (c) (not (is-component-type comp-type c)))
                  (entity-components ent))]
          [new-ent (struct-copy entity ent
@@ -198,7 +249,7 @@
     w))
 
 (define (update-game w)
-  ((compose apply-velocity-to-position set-player-velocity) w))
+  ((compose apply-velocity-to-position set-player-velocity generate-terrain) w))
 
 ;; KeyPresses
 (define (keydown w a-key)
@@ -221,23 +272,8 @@
    0 10
    (rectangle 10 150 "solid" "brown")))
 
-(define (get-terrain-tile x y)
-  (terrain-tile (terrain-value (noise-fn x y))))
-
-;; Start out just generating some entities for the terrain. Don't
-;; worry about making it a system that generates as you walk yet.
-(define (generate-some-initial-terrain)
-  (for*/list ([y (range -10 10)]
-              [x (range -10 10)])
-    ;; TODO: real id because id's will matter soon.
-    (entity (string-append "terrain:" (number->string x) "," (number->string y) "," "0")
-            (list (icon (get-terrain-tile x y))
-                  (position (list x y 0))))))
-
 ;; Initial scene.
 (define test-scene
-  (append
-   (generate-some-initial-terrain)
    (list
     (entity "rock"
             (list (position '(1 1 1))
@@ -264,12 +300,13 @@
                   (icon (make-shitty-tree-icon))))
     (entity "tree3"
             (list (position '(225 120 0))
-                  (icon (make-shitty-tree-icon))))
-    )))
+                  (icon (make-shitty-tree-icon)))))
+    )
 
 (define (start-scene)
   (big-bang (gamestate test-scene
-                       '())
+                       '()
+                       (set))
             (on-tick update-game)
             (on-key keydown)
             (on-release keyup)
