@@ -7,7 +7,7 @@ Grublies
 
 |#
 
-(require racket/set         
+(require racket/set
          2htdp/universe
          2htdp/image
          2htdp/planetcute
@@ -45,21 +45,24 @@ Grublies
 (define (noise-fn x y #:zoom [zoom 10])
   (simplex (/ x zoom) (/ y zoom)))
 
-(define (get-terrain-tile x y)
-  (terrain-tile (terrain-value (noise-fn x y))))
+(define (get-terrain-type x y)
+  (terrain-value (noise-fn x y)))
 
 ;; GAMEPLAY STUFF
 ;; ==============
 
 (define SCREEN-WIDTH 1024)
 (define SCREEN-HEIGHT 600)
+(define DRAW-HEIGHT 10)
+(define DRAW-WIDTH 12)
 (define TILE-SCALE-X 100)
 (define TILE-SCALE-Y 80)
 (define TILE-SCALE-Z -40)
-(define PLAYER-SPEED 1/10)
+(define PLAYER-SPEED 1/5)
+(define TICKS-PER-SECOND 60)
 
 ;; GameState
-(struct gamestate (entities keysdown terrain-tiles) #:transparent)
+(struct gamestate (entities keysdown terrain) #:transparent)
 
 ;; Entities
 (struct entity (id components) #:transparent)
@@ -69,6 +72,7 @@ Grublies
 (struct velocity (val) #:mutable #:transparent)
 (struct icon (val) #:mutable #:transparent)
 (struct player () #:transparent)
+(struct bugger () #:transparent)
 
 (define (is-component-type t c)
     (let ([checker
@@ -76,7 +80,8 @@ Grublies
              [(equal? t position) position?]
              [(equal? t velocity) velocity?]
              [(equal? t icon) icon?]
-             [(equal? t player) player?])])
+             [(equal? t player) player?]
+             [(equal? t bugger) bugger?])])
       (checker c)))
 
 (define (get-with-components entities comp-types)
@@ -109,7 +114,6 @@ Grublies
     (list (- (first pos) x-offset)
           (- (second pos) y-offset))))
 
-;; TODO: probably want vectors and vector math for this.
 (define (game-space->screen-space pos)
   (list (* TILE-SCALE-X (first pos))
         (+ (* TILE-SCALE-Y (second pos))
@@ -124,9 +128,6 @@ Grublies
         (/ (second loc) 80)
         0))
 
-(define DRAW-HEIGHT 10)
-(define DRAW-WIDTH 12)
-
 (define (draw-terrain terrain center-screen)
   (define center-x (first center-screen))
   (define center-y (second center-screen))
@@ -138,9 +139,9 @@ Grublies
     (let ([draw-position (compute-screen-position
                           (game-space->screen-space center-screen)
                           (game-space->screen-space (list x y 0)))]
-          [img (hash-ref terrain (list x y) #f)])
-      (if img
-          (place-image (hash-ref terrain (list x y))
+          [t (hash-ref terrain (cons x y) #f)])
+      (if t
+          (place-image (terrain-tile t)
                        (first draw-position)
                        (second draw-position)
                        canvas)
@@ -163,60 +164,14 @@ Grublies
 
 (define (render-game state)
   (let* ([ents (gamestate-entities state)]
-         [terrain (gamestate-terrain-tiles state)]
+         [terrain (gamestate-terrain state)]
          [player (get-player ents)]
          [player-position (position-val (get-component player position))]
          [canvas (draw-terrain terrain player-position)])
     (draw-icons ents player-position canvas)))
 
 ;; Update
-
-;; Start out just generating some entities for the terrain. Don't
-;; worry about making it a system that generates as you walk yet.
-(define (generate-some-initial-terrain)
-  (for*/list ([y (range -10 10)]
-              [x (range -10 10)])
-    ;; TODO: real id because id's will matter soon.
-    (entity (string-append "terrain:"
-                           (number->string x) ","
-                           (number->string y) ","
-                           "0")
-            (list (icon (get-terrain-tile x y))
-                  (position (list x y 0))))))
-
-;; System
-;; Comps: velocity player
-
-(define RENDER-DISTANCE 10)
-
-;; Need to generate terrain before the player gets to it.
-(define (generate-terrain w)
-  (define rendered-tiles (gamestate-terrain-tiles w))
-  (define player (get-player (gamestate-entities w)))
-  (define player-pos (position-val (get-component player position)))
-  (define player-pos-x (first player-pos))
-  (define player-pos-y (second player-pos))
-  (define new-rendered-tiles
-    (for*/fold ([tiles rendered-tiles])
-               ([x (range (- (floor player-pos-x) RENDER-DISTANCE)
-                          (+ (floor player-pos-x) RENDER-DISTANCE))]
-                [y (range (- (floor player-pos-y) RENDER-DISTANCE)
-                          (+ (floor player-pos-y) RENDER-DISTANCE))]
-                #:when (not (hash-has-key? tiles (list x y))))
-      (hash-set tiles (list x y) (get-terrain-tile x y))))
-  (struct-copy gamestate w [terrain-tiles new-rendered-tiles]))
-
-(define (get-player-velocity keys-down)
-  (let ([apply-directional-velociy
-         (λ (k v)
-           (cond
-             [(key=? k "w") (map + v '(0 -1 0))]
-             [(key=? k "a") (map + v '(-1 0 0))]
-             [(key=? k "s") (map + v '(0 1 0))]
-             [(key=? k "d") (map + v '(1 0 0))]
-             [else v]))])
-    (map (curry * PLAYER-SPEED)
-         (foldl apply-directional-velociy '(0 0 0) keys-down))))
+;; ======
 
 ;; Takes the list of entities, replaces the component of comp-type
 ;; on the entity with id id with new-component.
@@ -232,6 +187,42 @@ Grublies
          [new-ent (struct-copy entity ent
                                [components (cons new-comp comps)])])
     (cons new-ent others)))
+
+;; This keeps instances of the images in the hash-map, that isn't
+;; really a good idea because we have a badgillion copies. We should
+;; just keep if it's grass or dirt or whatever in the map and only
+;; have one instance of each image.
+
+(define RENDER-DISTANCE 10)
+
+;; Need to generate terrain before the player gets to it.
+(define (generate-terrain w)
+  (define current-terrain (gamestate-terrain w))
+  (define player (get-player (gamestate-entities w)))
+  (define player-pos (position-val (get-component player position)))
+  (define player-pos-x (first player-pos))
+  (define player-pos-y (second player-pos))
+  (define new-terrain
+    (for*/fold ([terrain current-terrain])
+               ([x (range (- (floor player-pos-x) RENDER-DISTANCE)
+                          (+ (floor player-pos-x) RENDER-DISTANCE))]
+                [y (range (- (floor player-pos-y) RENDER-DISTANCE)
+                          (+ (floor player-pos-y) RENDER-DISTANCE))]
+                #:when (not (hash-has-key? terrain (cons x y))))
+      (hash-set terrain (cons x y) (get-terrain-type x y))))
+  (struct-copy gamestate w [terrain new-terrain]))
+
+(define (get-player-velocity keys-down)
+  (let ([apply-directional-velociy
+         (λ (k v)
+           (cond
+             [(key=? k "w") (map + v '(0 -1 0))]
+             [(key=? k "a") (map + v '(-1 0 0))]
+             [(key=? k "s") (map + v '(0 1 0))]
+             [(key=? k "d") (map + v '(1 0 0))]
+             [else v]))])
+    (map (curry * PLAYER-SPEED)
+         (foldl apply-directional-velociy '(0 0 0) keys-down))))
 
 ;; System
 ;; Comps: velocity player
@@ -298,11 +289,15 @@ Grublies
     (entity "rock"
             (list (position '(2 1 2))
                   (icon stone-block)))
+    (entity "bugger"
+            (list (position '(1 5 0))
+                  (bugger)
+                  (icon enemy-bug)))
     (entity "player"
             (list (player)
                   (position '(5 5 0))
                   (velocity '(0 0 0))
-                  (icon (circle 20 "solid" "blue"))))
+                  (icon character-horn-girl)))
     (entity "tree1"
             (list (position '(900 502 0))
                   (icon (make-shitty-tree-icon))))
@@ -318,7 +313,7 @@ Grublies
   (big-bang (gamestate test-scene
                        '()
                        (make-immutable-hash))
-            (on-tick update-game 1/60)
+            (on-tick update-game (/ 1 TICKS-PER-SECOND))
             (on-key keydown)
             (on-release keyup)
             (to-draw render-game)))
