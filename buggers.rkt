@@ -51,13 +51,16 @@ Grublies
 ;; GAMEPLAY STUFF
 ;; ==============
 
-(define SCREEN-WIDTH 1024)
-(define SCREEN-HEIGHT 600)
-(define DRAW-HEIGHT 10)
-(define DRAW-WIDTH 12)
+(define SCREEN-WIDTH ;1024
+  1366)
+(define SCREEN-HEIGHT ;600
+  768)
 (define TILE-SCALE-X 100)
 (define TILE-SCALE-Y 80)
 (define TILE-SCALE-Z -40)
+(define DRAW-HEIGHT (add1 (ceiling (/ SCREEN-WIDTH TILE-SCALE-Y))))
+(define DRAW-WIDTH (add1 (ceiling (/ SCREEN-WIDTH TILE-SCALE-X))))
+
 (define PLAYER-SPEED 1/5)
 (define TICKS-PER-SECOND 60)
 
