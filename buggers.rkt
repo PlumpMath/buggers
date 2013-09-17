@@ -191,11 +191,6 @@ Grublies
                                [components (cons new-comp comps)])])
     (cons new-ent others)))
 
-;; This keeps instances of the images in the hash-map, that isn't
-;; really a good idea because we have a badgillion copies. We should
-;; just keep if it's grass or dirt or whatever in the map and only
-;; have one instance of each image.
-
 (define RENDER-DISTANCE 10)
 
 ;; Need to generate terrain before the player gets to it.
@@ -322,3 +317,4 @@ Grublies
             (to-draw render-game)))
 
 ;;(start-scene)
+
