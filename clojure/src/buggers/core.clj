@@ -1,5 +1,7 @@
 (ns buggers.core
-  (:require [clojure.data.json :as json])
+  (:require
+   [clojure.math.numeric-tower :as math]
+   [clojure.data.json :as json])
   (:gen-class)
   (:import (com.badlogic.gdx ApplicationListener Gdx)
            (com.badlogic.gdx.files FileHandle)
@@ -22,7 +24,8 @@
               :velocity [0 0 0]
               :bugger nil}
     :rock1 {:position [6 6 0]}}
-   :terrain {[0 0] :grass-block
+   :terrain {[0 -1] :stone-block
+             [0 0] :grass-block
              [0 1] :stone-block
              [0 2] :water-block
              [0 3] :water-block
@@ -68,8 +71,9 @@
 (defn texture-region [texture x y w h]
   (TextureRegion. texture x y w h))
 
-;; Creates all the planetcute textures
-(defn planetcute-textures []
+(defn planetcute-textures
+  "Loads the planetcute texture and computes the texture regions."
+  []
   (let [planetcute-file (FileHandle.
                          (clojure.java.io/file
                           (clojure.java.io/resource "planetcute/planetcute.png")))
@@ -125,39 +129,59 @@
         (* scale-z z))]))
 
 (defn draw-position
-  "Calculates where a tile is drawn based on world scale and center screen"
-  [screen-width screen-height center pos]
+  "Calculates where a tile is drawn based on world scale, center screen
+   and the width and height of the texture."
+  [screen-width screen-height center pos w h]
   (let [[cx cy] (to-screen-space center)
         [px py] (to-screen-space pos)
         x-offset (- cx (/ screen-width 2))
         y-offset (- cy (/ screen-height 2))]
-    [(- px x-offset) (- py y-offset)]))
+    [(- (- px x-offset) (/ w 2))
+     (- (- py y-offset) (/ h 2))]))
 
-(deftype BuggersMainScene [gamestate draw-mesh sprite-batch]
+(deftype BuggersMainScene [gamestate draw-mesh
+                           textures sprite-batch]
   LibGDXScene
   (initialize [_]
     (reset! gamestate test-scene)
     ;; Set up graphics.
     (dosync (ref-set sprite-batch (SpriteBatch.)))
+    (dosync (ref-set textures (planetcute-textures)))
     )
   (pause [_] nil)
   (resize [_ w h] nil)
   (render [_]
-    (let [textures (planetcute-textures)
+    (let [screen-width (.getWidth Gdx/graphics)
+          screen-height (.getHeight Gdx/graphics)
           world @gamestate
-          center (get-in world [:entities :player :position])]
+          center (get-in world [:entities :player :position])
+          [cx cy _] center
+          range-x (range
+                   (math/floor (- cx (/ (/ screen-width 100) 2)))
+                   (math/ceil (+ cx (/ (/ screen-width 100) 2))))
+          range-y (range
+                   (math/floor (- cy (/ (/ screen-height 80) 2)))
+                   (math/ceil (+ cy (/ (/ screen-height 80) 2))))]
+
       ;; Clear Screen
       (doto (Gdx/gl)
         (.glClear GL10/GL_COLOR_BUFFER_BIT))
 
-      ;; Draw Terrain
+      ;; Draw
       (.begin @sprite-batch)
-      (doseq [x (range 0 4)
-              y (range 0 4)]
+      ;; Draw Visable Terrain
+      
+      (doseq [y (reverse range-y)
+              x range-x]
         (let [terrain-type (get-in world [:terrain [x y]])
-              [x y] (draw-position 1366 768 center [x y 0])]
+              [x y] (draw-position screen-width screen-height center [x y 0] 100 120)]
           (when terrain-type
-            (.draw @sprite-batch (terrain-type textures) (float x) (float y)))))
+            (.draw @sprite-batch (terrain-type @textures) (float x) (float y)))))
+
+      ;; Draw Player
+      (let [[x y] (draw-position screen-width screen-height center [cx cy 0] 77 91)]
+        (.draw @sprite-batch
+               (:character-horn-girl @textures) (float x) (float y)))
       (.end @sprite-batch)
       ))
    
@@ -169,7 +193,7 @@
 (defn app-listener
   "Creates an ApplicationListner instance that represents the game."
   [scene]
-  (let [scene (BuggersMainScene. (atom {}) (ref nil) (ref nil))]
+  (let [scene (BuggersMainScene. (atom {}) (ref nil) (ref nil) (ref nil))]
     {:listener (proxy [ApplicationListener] []
                  (resize [w h] (resize scene w h))
                  (create [] (initialize scene))
