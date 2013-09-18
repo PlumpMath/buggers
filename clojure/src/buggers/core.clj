@@ -5,6 +5,7 @@
   (:gen-class)
   (:import (com.badlogic.gdx ApplicationListener Gdx)
            (com.badlogic.gdx.files FileHandle)
+           (com.badlogic.gdx Input$Keys)
            (com.badlogic.gdx.graphics GL10 Mesh VertexAttribute
                                       Texture)
            (com.badlogic.gdx.graphics.g2d SpriteBatch TextureRegion)
@@ -15,7 +16,7 @@
 (def test-scene
   {:entities
    {:player {:health 100
-             :position [0 0 0]
+             :position [0.0 0.0 0.0]
              :velocity [0 0 0]
              :player nil
              :bugger nil}
@@ -139,6 +140,12 @@
     [(- (- px x-offset) (/ w 2))
      (- (- py y-offset) (/ h 2))]))
 
+
+;; Helpers for input and vectors, need to put these somewhere.
+(defn addv [v1 v2]
+  (map + v1 v2))
+
+
 (deftype BuggersMainScene [gamestate draw-mesh
                            textures sprite-batch]
   LibGDXScene
@@ -151,17 +158,37 @@
   (pause [_] nil)
   (resize [_ w h] nil)
   (render [_]
+    ;; Input Handling (not sure if it has to be in here yet)
+    (let [forward (.isKeyPressed Gdx/input Input$Keys/W)
+          backward (.isKeyPressed Gdx/input Input$Keys/S)
+          left (.isKeyPressed Gdx/input Input$Keys/A)
+          right (.isKeyPressed Gdx/input Input$Keys/D)
+          player-speed 0.5
+          player-direction (cond->> [0 0 0]
+                                    forward (map + [0 1 0])
+                                    backward (map + [0 -1 0])
+                                    left (map + [-1 0 0])
+                                    right (map + [1 0 0]))
+          player-motion (map (partial * player-speed) player-direction)]
+      (swap! gamestate
+             (fn [w]
+               (let [pos (get-in w [:entities :player :position])]
+                 (println pos)
+                 (assoc-in w [:entities :player :position]
+                           (map + pos player-motion))))))
+
+    ;; Drawing
     (let [screen-width (.getWidth Gdx/graphics)
           screen-height (.getHeight Gdx/graphics)
           world @gamestate
           center (get-in world [:entities :player :position])
           [cx cy _] center
-          range-x (range
-                   (math/floor (- cx (/ (/ screen-width 100) 2)))
-                   (math/ceil (+ cx (/ (/ screen-width 100) 2))))
-          range-y (range
-                   (math/floor (- cy (/ (/ screen-height 80) 2)))
-                   (math/ceil (+ cy (/ (/ screen-height 80) 2))))]
+          range-x (map int (range
+                            (math/floor (- cx (/ (/ screen-width 100) 2)))
+                            (math/ceil (+ cx (/ (/ screen-width 100) 2)))))
+          range-y (map int (range
+                            (math/floor (- cy (/ (/ screen-height 80) 2)))
+                            (math/ceil (+ cy (/ (/ screen-height 80) 2)))))]
 
       ;; Clear Screen
       (doto (Gdx/gl)
@@ -176,6 +203,7 @@
         (let [terrain-type (get-in world [:terrain [x y]])
               [x y] (draw-position screen-width screen-height center [x y 0] 100 120)]
           (when terrain-type
+            (println x y)
             (.draw @sprite-batch (terrain-type @textures) (float x) (float y)))))
 
       ;; Draw Player
