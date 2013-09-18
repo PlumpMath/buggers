@@ -22,22 +22,22 @@
               :velocity [0 0 0]
               :bugger nil}
     :rock1 {:position [6 6 0]}}
-   :terrain {[0 0] :grass
-             [0 1] :woods
-             [0 2] :water
-             [0 3] :water
-             [1 0] :grass
-             [1 1] :grass
-             [1 2] :water
-             [1 3] :grass
-             [2 0] :grass
-             [2 1] :grass
-             [2 2] :water
-             [2 3] :grass
-             [3 0] :grass
-             [3 1] :grass
-             [3 2] :water
-             [3 3] :grass}})
+   :terrain {[0 0] :grass-block
+             [0 1] :stone-block
+             [0 2] :water-block
+             [0 3] :water-block
+             [1 0] :grass-block
+             [1 1] :grass-block
+             [1 2] :water-block
+             [1 3] :grass-block
+             [2 0] :grass-block
+             [2 1] :grass-block
+             [2 2] :water-block
+             [2 3] :grass-block
+             [3 0] :grass-block
+             [3 1] :grass-block
+             [3 2] :water-block
+             [3 3] :grass-block}})
 
 ;; Drawing
 ;; =======
@@ -45,63 +45,25 @@
 
 ;; Textures
 ;; ========
-(def texture-locations
-  {:stone-block [208 586 101 123],
-   :gem-blue [206 155 101 113],
-   :shadow-north [513 413 101 91],
-   :chest-open [686 2 101 121],
-   :roof-south-east [824 288 101 123],
-   :roof-south [105 413 101 121],
-   :enemy-bug [105 155 99 77],
-   :character-boy [105 2 67 89],
-   :heart [618 155 89 91],
-   :character-princess-girl [403 2 75 99],
-   :roof-north-west [618 288 101 85],
-   :dirt-block [789 2 101 121],
-   :shadow-north-west [460 413 51 51],
-   :roof-north-east [515 288 101 85],
-   :shadow-side-west [616 413 51 41],
-   :key [709 155 59 99],
-   :shadow-north-east [437 413 21 51],
-   :selector [311 413 101 171],
-   :door-tall-open [2 155 101 79],
-   :grass-block [515 155 101 131],
-   :brown-block [2 2 101 121],
-   :ramp-west [208 288 101 119],
-   :ramp-north [2 288 101 81],
-   :shadow-south [745 413 101 21],
-   :shadow-east [414 413 21 81],
-   :tree-short [311 586 99 107],
-   :roof-west [208 413 101 119],
-   :shadow-west [848 413 51 81],
-   :ramp-east [873 155 101 119],
-   :rock [311 288 99 99],
-   :roof-east [412 288 101 119],
-   :gem-orange [412 155 101 113],
-   :water-block
-   [824 586 101 121],
-   :window-tall [2 755 101 161],
-   :door-tall-closed [892 2 101 151],
-   :character-cat-girl [174 2 69 91],
-   :wood-block [105 755 101 121],
-   :speechbubble [901 413 101 107],
-   :tree-ugly [515 586 101 115],
-   :character-horn-girl [245 2 77 91],
-   :stone-block-tall [105 586 101 163],
-   :character-pink-girl [324 2 77 89],
-   :chest-lid [583 2 101 85],
-   :wall-block-tall [618 586 101 167],
-   :gem-green [309 155 101 113],
-   :ramp-south [105 288 101 121],
-   :star [2 586 101 101],
-   :chest-closed [480 2 101 121],
-   :roof-north [721 288 101 81],
-   :wall-block [721 586 101 127],
-   :plain-block [770 155 101 121],
-   :shadow-south-east [669 413 21 51],
-   :roof-south-west [2 413 101 123],
-   :tree-tall [412 586 101 137],
-   :shadow-south-west [692 413 51 51]})
+(defn get-texture-locations []
+  (let [get-frames #(get % "frames")]
+    (->> (clojure.java.io/resource "planetcute/planetcute.json")
+         slurp
+         json/read-str
+         get-frames
+         (map #(vector (get % "filename") (get % "frame")))
+         (map (fn [[k v]]
+                (vector (-> k
+                            clojure.string/lower-case
+                            (clojure.string/replace ".png" "")
+                            (clojure.string/replace " " "-")
+                            keyword)
+                        [(get v "x")
+                         (get v "y")
+                         (get v "w")
+                         (get v "h")])))
+         (into {})
+         )))
 
 (defn texture-region [texture x y w h]
   (TextureRegion. texture x y w h))
@@ -115,7 +77,7 @@
     (into {}
           (map
            (fn [[k v]] (vector k (apply texture-region texture v)))
-           texture-locations))))
+           (get-texture-locations)))))
 
 (defn draw-test-triangle []
   (let [vertices (float-array [-0.5 -0.5 0 0.5 -0.5 0 0 0.5 0])
@@ -151,6 +113,26 @@
   (render [this] "Draw current scene")
   (dispose [this] "not sure yet..."))
 
+(defn to-screen-space
+  "Scales a position in game-space to screen-space"
+  [pos]
+  (let [scale-x 100
+        scale-y 80
+        scale-z -40
+        [x y z] pos]
+    [(* scale-x x)
+     (+ (* scale-y y)
+        (* scale-z z))]))
+
+(defn draw-position
+  "Calculates where a tile is drawn based on world scale and center screen"
+  [screen-width screen-height center pos]
+  (let [[cx cy] (to-screen-space center)
+        [px py] (to-screen-space pos)
+        x-offset (- cx (/ screen-width 2))
+        y-offset (- cy (/ screen-height 2))]
+    [(- px x-offset) (- py y-offset)]))
+
 (deftype BuggersMainScene [gamestate draw-mesh sprite-batch]
   LibGDXScene
   (initialize [_]
@@ -161,16 +143,22 @@
   (pause [_] nil)
   (resize [_ w h] nil)
   (render [_]
-    (let [textures (planetcute-textures)]
+    (let [textures (planetcute-textures)
+          world @gamestate
+          center (get-in world [:entities :player :position])]
       ;; Clear Screen
       (doto (Gdx/gl)
         (.glClear GL10/GL_COLOR_BUFFER_BIT))
 
-      ;; Draw Grass Block
-      (doto @sprite-batch
-        (.begin)
-        (.draw (:stone-block textures) (float 10) (float 10))
-        (.end))
+      ;; Draw Terrain
+      (.begin @sprite-batch)
+      (doseq [x (range 0 4)
+              y (range 0 4)]
+        (let [terrain-type (get-in world [:terrain [x y]])
+              [x y] (draw-position 1366 768 center [x y 0])]
+          (when terrain-type
+            (.draw @sprite-batch (terrain-type textures) (float x) (float y)))))
+      (.end @sprite-batch)
       ))
    
   (dispose [_] nil))
