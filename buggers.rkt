@@ -248,8 +248,23 @@ Grublies
       (update-position! e))
     w))
 
+;; System
+;; Comps: bugger position
+(define (test-bugger-ai w)
+  (let* ([ents (gamestate-entities w)]
+         [buggers (get-with-components (gamestate-entities w)
+                                       (list bugger position velocity))])
+    (for ([e buggers])
+      (set-velocity-val! (get-component e velocity) (list (/ (random) 100)
+                                                          (/ (random) 100)
+                                                          0.0)))
+    w))
+
 (define (update-game w)
-  ((compose apply-velocity-to-position set-player-velocity generate-terrain) w))
+  ((compose apply-velocity-to-position
+            set-player-velocity
+            test-bugger-ai
+            generate-terrain) w))
 
 ;; KeyPresses
 (define (keydown w a-key)
@@ -263,6 +278,8 @@ Grublies
     (struct-copy gamestate w
                  [keysdown (filter (λ (k) (not (key=? a-key k))) keys)])))
 
+
+;; Graphics
 (define (make-shitty-tree-icon)
   (overlay/align/offset
    "middle" "top"
@@ -289,6 +306,7 @@ Grublies
                   (icon stone-block)))
     (entity "bugger"
             (list (position '(1 5 0))
+                  (velocity '(0 0 0))
                   (bugger)
                   (icon enemy-bug)))
     (entity "player"
@@ -316,5 +334,7 @@ Grublies
             (on-release keyup)
             (to-draw render-game)))
 
-;;(start-scene)
+(define (test) (gamestate-entities (start-scene)))
+
+;;(gamestate-entities (start-scene))
 
