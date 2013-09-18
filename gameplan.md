@@ -1,4 +1,4 @@
-# Buggers Gameplan
+## Buggers Gameplan
 
 * Buggers is a game about training animals to do shit for you and stuff.
 * There will be lots of species and creatures working at various levels of
@@ -9,3 +9,6 @@ The player and all the creatures in the game will have a heirchy of needs. These
 
 # Food
 Everybody has to eat so this is the first need. There will be multiple kinds of food in the world and the player and all the different buggers will need to eat something. Carnivores will eat smaller creatures. Herbavores will eat plants. The player might be able to train big creatures to get hard to reach foods they don't care about for some food they do care about. Lategame more advanced creatures won't hunt or anything as much as buy food in stores or gather food to sell in stores. Full on economy yo.
+
+## TODO (this is a daily list, not a huge unmaintainable spec)
+* Remove mutability stuff

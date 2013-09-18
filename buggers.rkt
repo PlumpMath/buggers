@@ -71,9 +71,9 @@ Grublies
 (struct entity (id components) #:transparent)
 
 ;; Components
-(struct position (val) #:mutable #:transparent)
-(struct velocity (val) #:mutable #:transparent)
-(struct icon (val) #:mutable #:transparent)
+(struct position (val) #:transparent)
+(struct velocity (val) #:transparent)
+(struct icon (val) #:transparent)
 (struct player () #:transparent)
 (struct bugger () #:transparent)
 
@@ -151,7 +151,7 @@ Grublies
         canvas))))
 
 (define (draw-icons ents center-screen canvas)
-  (let ([ents-with-icons (get-with-components ents (list icon))])
+  (let ([ents-with-icons (get-with-components ents (list icon position))])
     (foldl (λ (e screen)
               (let* ([img (icon-val (get-component e icon))]
                      [position (position-val (get-component e position))]
@@ -230,35 +230,37 @@ Grublies
          [ents (gamestate-entities w)]
          [player (get-player ents)]
          [players-current-velocity (get-component player velocity)])
-    (set-velocity-val! players-current-velocity v)
-    w))
-
-(define (update-position! e)
-  (let ([v (get-component e velocity)]
-        [p (get-component e position)])
-    (and v p (set-position-val! p (map +
-                                       (velocity-val v)
-                                       (position-val p))))))
+    (struct-copy gamestate w
+                 [entities
+                  (swap-component ents (entity-id player) velocity (velocity v))])))
 
 ;; System
 ;; Comps: velocity position
 (define (apply-velocity-to-position w)
-  (let* ([ents (gamestate-entities w)])
-    (for ([e ents])
-      (update-position! e))
-    w))
+  (define starting-ents (gamestate-entities w))
+  (define new-ents
+    (for/fold ([ents starting-ents])
+              ([e starting-ents])
+      (define v (get-component e velocity))
+      (define p (get-component e position))
+      (define new-p (and v p (map + (velocity-val v) (position-val p))))
+      (if new-p
+          (swap-component ents (entity-id e) position (position new-p))
+          ents)))
+  (struct-copy gamestate w [entities new-ents]))
+
 
 ;; System
 ;; Comps: bugger position
 (define (test-bugger-ai w)
-  (let* ([ents (gamestate-entities w)]
-         [buggers (get-with-components (gamestate-entities w)
-                                       (list bugger position velocity))])
-    (for ([e buggers])
-      (set-velocity-val! (get-component e velocity) (list (/ (random) 100)
-                                                          (/ (random) 100)
-                                                          0.0)))
-    w))
+  ;; (let* ([ents (gamestate-entities w)]
+  ;;        [buggers (get-with-components (gamestate-entities w)
+  ;;                                      (list bugger position velocity))])
+  ;;   (for ([e buggers])
+  ;;     (set-velocity-val! (get-component e velocity) (list (/ (random) 100)
+  ;;                                                         (/ (random) 100)
+  ;;                                                         0.0))))
+    w)
 
 (define (update-game w)
   ((compose apply-velocity-to-position
