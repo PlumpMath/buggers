@@ -1,5 +1,7 @@
 (ns buggers.core
   (:require
+   [buggers.systems :as sys]
+   [buggers.systems.terrain :refer [terrain-system]]
    [clojure.math.numeric-tower :as math]
    [clojure.data.json :as json])
   (:gen-class)
@@ -18,30 +20,16 @@
   {:entities
    {:player {:health 100
              :position [0.0 0.0 0.0]
-             :speed 2
+             :speed 5
              :player nil
              :bugger nil}
     :bugger1 {:health 50
               :position [5 5 0]
               :bugger nil}
-    :rock1 {:position [6 6 0]}}
-   :terrain {[0 -1] :stone-block
-             [0 0] :grass-block
-             [0 1] :stone-block
-             [0 2] :water-block
-             [0 3] :water-block
-             [1 0] :grass-block
-             [1 1] :grass-block
-             [1 2] :water-block
-             [1 3] :grass-block
-             [2 0] :grass-block
-             [2 1] :grass-block
-             [2 2] :water-block
-             [2 3] :grass-block
-             [3 0] :grass-block
-             [3 1] :grass-block
-             [3 2] :water-block
-             [3 3] :grass-block}})
+    :rock1 {:position [6 6 0]}}})
+
+(def test-systems
+  [(terrain-system)])
 
 ;; Drawing
 ;; =======
@@ -84,30 +72,6 @@
            (fn [[k v]] (vector k (apply texture-region texture v)))
            (get-texture-locations)))))
 
-(defn draw-test-triangle []
-  (let [vertices (float-array [-0.5 -0.5 0 0.5 -0.5 0 0 0.5 0])
-        triangles (into-array Short/TYPE [0 1 2])
-        attrs (into-array VertexAttribute
-         [(VertexAttribute.
-           com.badlogic.gdx.graphics.VertexAttributes$Usage/Position
-           3 "a_position")])
-        mesh (ref nil)]
-    (doto (Gdx/gl)
-      (.glClear GL10/GL_COLOR_BUFFER_BIT))
-    (doto @mesh
-      (.render GL10/GL_TRIANGLES 0 3))))
-
-(defn setup-test-triangle []
-  (let [vertices (float-array [-0.5 -0.5 0 0.5 -0.5 0 0 0.5 0])
-        triangles (into-array Short/TYPE [0 1 2])
-        attrs (into-array VertexAttribute
-                          [(VertexAttribute.
-                            com.badlogic.gdx.graphics.VertexAttributes$Usage/Position
-                            3 "a_position")])]
-    (doto (Mesh. true 3 3 attrs)
-      (.setVertices vertices)
-      (.setIndices triangles))))
-
 ;; SCENE
 ;; =====
 
@@ -140,22 +104,17 @@
     [(- (- px x-offset) (/ w 2))
      (- (- py y-offset) (/ h 2))]))
 
-;; Helpers for terrain
-(defn noise-fn [x y]
-  (SimplexNoise/noise (/ x 10) (/ y 10)))
 
-(defn terrain-value [n]
-  (condp > n
-    -0.75 :water-block
-    0 :dirt-block
-    0.75 :grass-block
-    :stone-block))
-
-(deftype BuggersMainScene [gamestate draw-mesh
-                           textures sprite-batch]
+(deftype BuggersMainScene [gamestate
+                           systems
+                           draw-mesh
+                           textures
+                           sprite-batch]
   LibGDXScene
   (initialize [_]
+    ;; Test Scene
     (reset! gamestate test-scene)
+    (reset! systems test-systems)
     ;; Set up graphics.
     (dosync (ref-set sprite-batch (SpriteBatch.)))
     (dosync (ref-set textures (planetcute-textures)))
@@ -184,21 +143,9 @@
                  (assoc-in w [:entities :player :position]
                            (map + pos (map (partial * speed) player-motion)))))))
 
-    ;; Terrain Generation (definitely should be moved out)
-    (let [w @gamestate
-          render-distance 11
-          current-terrain (:terrain w)
-          player-pos (get-in w [:entities :player :position])
-          [x y _] player-pos
-          range-x (map int (range (- (math/floor x) render-distance)
-                                  (+ (math/floor x) render-distance)))
-          range-y (map int (range (- (math/floor y) render-distance)
-                                  (+ (math/floor y) render-distance)))
-          new-terrain (into {} (for [x range-x
-                                     y range-y
-                                     :when (not (contains? current-terrain [x y]))]
-                                 (vector [x y] (terrain-value (noise-fn x y)))))]
-      (swap! gamestate assoc :terrain (merge current-terrain new-terrain)))
+    ;; Run Systems!
+    (doseq [s @systems]
+      (swap! gamestate (partial sys/run s)))
 
     ;; Drawing
     (let [screen-width (.getWidth Gdx/graphics)
@@ -243,7 +190,11 @@
 (defn app-listener
   "Creates an ApplicationListner instance that represents the game."
   [scene]
-  (let [scene (BuggersMainScene. (atom {}) (ref nil) (ref nil) (ref nil))]
+  (let [scene (BuggersMainScene. (atom {})
+                                 (atom [])
+                                 (ref nil)
+                                 (ref nil)
+                                 (ref nil))]
     {:listener (proxy [ApplicationListener] []
                  (resize [w h] (resize scene w h))
                  (create [] (initialize scene))
