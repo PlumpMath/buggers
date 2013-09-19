@@ -15,6 +15,7 @@
   {:entities
    {:player {:health 100
              :position [0.0 0.0 0.0]
+             :icon :character-horn-girl
              :speed 5
              :player nil
              :bugger nil}

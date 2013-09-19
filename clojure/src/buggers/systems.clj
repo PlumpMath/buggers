@@ -23,3 +23,12 @@
   "Gets the player entity."
   [world]
   (get-in world [:entities :player]))
+
+;; TODO: multiple so I don't just assume if you have an icon you have
+;; a position.
+(defn get-with-component
+  "Gets a sequence of [id comps] of all the entities that have a component."
+  [world comp]
+  (filter
+   (fn [[id comps]] (contains? comps comp))
+   (:entities world)))

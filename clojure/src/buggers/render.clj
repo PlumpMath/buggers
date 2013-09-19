@@ -1,5 +1,6 @@
 (ns buggers.render
   (:require
+   [buggers.systems :as sys]
    [clojure.math.numeric-tower :as math]
    [clojure.data.json :as json])
   (:import
@@ -7,9 +8,7 @@
    (com.badlogic.gdx.files FileHandle)
    (com.badlogic.gdx.graphics GL10 Mesh VertexAttribute
                               Texture)
-   (com.badlogic.gdx.graphics.g2d SpriteBatch TextureRegion)
-   )
-  )
+   (com.badlogic.gdx.graphics.g2d SpriteBatch TextureRegion)))
 
 ;; Load textures.
 (defn get-texture-locations []
@@ -102,10 +101,15 @@
           (when terrain-type
             (.draw sprite-batch (terrain-type textures) (float x) (float y)))))
 
-      ;; Draw Player
-      (let [[x y] (draw-position screen-width screen-height center [cx cy 0] 77 91)]
-        (.draw sprite-batch
-               (:character-horn-girl textures) (float x) (float y)))
+      ;; Draw Entities with Icons
+      (let [icon-ents (sys/get-with-component world :icon)]
+        (doseq [[id comps] icon-ents]
+          (let [[x y z] (:position comps)
+                [dx dy] (draw-position screen-width screen-height center [x y z] 77 91);; Assuming size of icon, prlly bad.
+                texture ((:icon comps) textures)]
+            (.draw sprite-batch
+                   texture (float dx) (float dy)))))
+
       (.end sprite-batch)
       )))
 
