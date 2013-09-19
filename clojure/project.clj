@@ -10,4 +10,5 @@
                  [com.badlogic.gdx/gdx-backend-lwjgl "0.9.9-SNAPSHOT"]
                  ]
   :repositories [["libgdx" "http://libgdx.badlogicgames.com/nightlies/maven/"]]
+  :java-source-paths ["java"]
   :main buggers.core)

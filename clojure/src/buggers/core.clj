@@ -3,7 +3,8 @@
    [clojure.math.numeric-tower :as math]
    [clojure.data.json :as json])
   (:gen-class)
-  (:import (com.badlogic.gdx ApplicationListener Gdx)
+  (:import (SimplexNoise)
+           (com.badlogic.gdx ApplicationListener Gdx)
            (com.badlogic.gdx.files FileHandle)
            (com.badlogic.gdx Input$Keys)
            (com.badlogic.gdx.graphics GL10 Mesh VertexAttribute
@@ -17,12 +18,11 @@
   {:entities
    {:player {:health 100
              :position [0.0 0.0 0.0]
-             :velocity [0 0 0]
+             :speed 2
              :player nil
              :bugger nil}
     :bugger1 {:health 50
               :position [5 5 0]
-              :velocity [0 0 0]
               :bugger nil}
     :rock1 {:position [6 6 0]}}
    :terrain {[0 -1] :stone-block
@@ -140,11 +140,16 @@
     [(- (- px x-offset) (/ w 2))
      (- (- py y-offset) (/ h 2))]))
 
+;; Helpers for terrain
+(defn noise-fn [x y]
+  (SimplexNoise/noise (/ x 10) (/ y 10)))
 
-;; Helpers for input and vectors, need to put these somewhere.
-(defn addv [v1 v2]
-  (map + v1 v2))
-
+(defn terrain-value [n]
+  (condp > n
+    -0.75 :water-block
+    0 :dirt-block
+    0.75 :grass-block
+    :stone-block))
 
 (deftype BuggersMainScene [gamestate draw-mesh
                            textures sprite-batch]
@@ -158,24 +163,42 @@
   (pause [_] nil)
   (resize [_ w h] nil)
   (render [_]
+
     ;; Input Handling (not sure if it has to be in here yet)
     (let [forward (.isKeyPressed Gdx/input Input$Keys/W)
           backward (.isKeyPressed Gdx/input Input$Keys/S)
           left (.isKeyPressed Gdx/input Input$Keys/A)
           right (.isKeyPressed Gdx/input Input$Keys/D)
-          player-speed 0.5
+          delta (.getDeltaTime Gdx/graphics)
           player-direction (cond->> [0 0 0]
                                     forward (map + [0 1 0])
                                     backward (map + [0 -1 0])
                                     left (map + [-1 0 0])
                                     right (map + [1 0 0]))
-          player-motion (map (partial * player-speed) player-direction)]
+          player-motion (map (partial * delta)
+                             player-direction)]
       (swap! gamestate
              (fn [w]
-               (let [pos (get-in w [:entities :player :position])]
-                 (println pos)
+               (let [pos (get-in w [:entities :player :position])
+                     speed (get-in w [:entities :player :speed])]
                  (assoc-in w [:entities :player :position]
-                           (map + pos player-motion))))))
+                           (map + pos (map (partial * speed) player-motion)))))))
+
+    ;; Terrain Generation (definitely should be moved out)
+    (let [w @gamestate
+          render-distance 11
+          current-terrain (:terrain w)
+          player-pos (get-in w [:entities :player :position])
+          [x y _] player-pos
+          range-x (map int (range (- (math/floor x) render-distance)
+                                  (+ (math/floor x) render-distance)))
+          range-y (map int (range (- (math/floor y) render-distance)
+                                  (+ (math/floor y) render-distance)))
+          new-terrain (into {} (for [x range-x
+                                     y range-y
+                                     :when (not (contains? current-terrain [x y]))]
+                                 (vector [x y] (terrain-value (noise-fn x y)))))]
+      (swap! gamestate assoc :terrain (merge current-terrain new-terrain)))
 
     ;; Drawing
     (let [screen-width (.getWidth Gdx/graphics)
@@ -184,11 +207,11 @@
           center (get-in world [:entities :player :position])
           [cx cy _] center
           range-x (map int (range
-                            (math/floor (- cx (/ (/ screen-width 100) 2)))
-                            (math/ceil (+ cx (/ (/ screen-width 100) 2)))))
+                            (math/floor (- cx (/ (/ screen-width 100) 1.5)))
+                            (math/ceil (+ cx (/ (/ screen-width 100) 1.5)))))
           range-y (map int (range
-                            (math/floor (- cy (/ (/ screen-height 80) 2)))
-                            (math/ceil (+ cy (/ (/ screen-height 80) 2)))))]
+                            (math/floor (- cy (/ (/ screen-height 80) 1.5)))
+                            (math/ceil (+ cy (/ (/ screen-height 80) 1.5)))))]
 
       ;; Clear Screen
       (doto (Gdx/gl)
@@ -203,7 +226,6 @@
         (let [terrain-type (get-in world [:terrain [x y]])
               [x y] (draw-position screen-width screen-height center [x y 0] 100 120)]
           (when terrain-type
-            (println x y)
             (.draw @sprite-batch (terrain-type @textures) (float x) (float y)))))
 
       ;; Draw Player
