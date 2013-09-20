@@ -1,7 +1,12 @@
 (ns buggers.systems.terrain
-  (:require [buggers.systems :refer :all]
+  (:require [buggers.systems :refer [GameSystem]]
+            [buggers.world :as w]
             [clojure.math.numeric-tower :as math])
   (:import (SimplexNoise)))
+
+;; Distance from the player in gamespace that we render. 11 should
+;; cover enough so we see the whole screen.
+(def render-distance 11)
 
 ;; TODO: figure out how to change a seed.
 (defn noise
@@ -19,19 +24,18 @@
     0.75 :grass-block
     :stone-block))
 
-(defrecord TerrainSystem [render-distance]
-  GameSystem
-  (run [_ w]
-    (let [current-terrain (:terrain w)
-          [x y _] (:position (get-player w))
-          range-x (map int (range (- (math/floor x) render-distance)
-                                  (+ (math/floor x) render-distance)))
-          range-y (map int (range (- (math/floor y) render-distance)
-                                  (+ (math/floor y) render-distance)))
-          new-terrain (into {} (for [x range-x
-                                     y range-y
-                                     :when (not (contains? current-terrain [x y]))]
-                                 (vector [x y] (terrain-type (noise x y)))))]
-      (assoc w :terrain (merge current-terrain new-terrain)))))
-
-(defn terrain-system [] (TerrainSystem. 11))
+(defn terrain-system
+  []
+  (reify GameSystem
+    (run [_ world]
+      (let [current-terrain (:terrain world)
+            [x y _] (:position (w/get-player world))
+            range-x (map int (range (- (math/floor x) render-distance)
+                                    (+ (math/floor x) render-distance)))
+            range-y (map int (range (- (math/floor y) render-distance)
+                                    (+ (math/floor y) render-distance)))
+            new-terrain (into {} (for [x range-x
+                                       y range-y
+                                       :when (not (contains? current-terrain [x y]))]
+                                   (vector [x y] (terrain-type (noise x y)))))]
+        (assoc world :terrain (merge current-terrain new-terrain))))))

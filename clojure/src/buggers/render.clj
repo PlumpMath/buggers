@@ -1,6 +1,7 @@
 (ns buggers.render
   (:require
-   [buggers.systems :as sys]
+   [buggers.world :as w]
+   [buggers.coordinates :as c]
    [clojure.math.numeric-tower :as math]
    [clojure.data.json :as json])
   (:import
@@ -46,24 +47,12 @@
            (fn [[k v]] (vector k (apply texture-region texture v)))
            (get-texture-locations)))))
 
-;; Computing Draw Position.
-(defn to-screen-space
-  "Scales a position in game-space to screen-space"
-  [pos]
-  (let [scale-x 100
-        scale-y 80
-        scale-z -40
-        [x y z] pos]
-    [(* scale-x x)
-     (+ (* scale-y y)
-        (* scale-z z))]))
-
 (defn draw-position
   "Calculates where a tile is drawn based on world scale, center screen
    and the width and height of the texture."
   [screen-width screen-height center pos w h]
-  (let [[cx cy] (to-screen-space center)
-        [px py] (to-screen-space pos)
+  (let [[cx cy] (c/to-screen-space center)
+        [px py] (c/to-screen-space pos)
         x-offset (- cx (/ screen-width 2))
         y-offset (- cy (/ screen-height 2))]
     [(- (- px x-offset) (/ w 2))
@@ -102,7 +91,7 @@
             (.draw sprite-batch (terrain-type textures) (float x) (float y)))))
 
       ;; Draw Entities with Icons
-      (let [icon-ents (sys/get-with-component world :icon)]
+      (let [icon-ents (w/get-with-components world :icon :position)]
         (doseq [[id comps] icon-ents]
           (let [[x y z] (:position comps)
                 [dx dy] (draw-position screen-width screen-height center [x y z] 77 91);; Assuming size of icon, prlly bad.

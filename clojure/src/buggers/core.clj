@@ -2,11 +2,11 @@
   (:require
    [buggers.systems :as sys]
    [buggers.systems.terrain :refer [terrain-system]]
+   [buggers.systems.player :refer [player-movement-system cursor-tile-system]]
    [buggers.render :as r])
   (:gen-class)
   (:import
-   (com.badlogic.gdx ApplicationListener Gdx)
-   (com.badlogic.gdx Input$Keys)
+   (com.badlogic.gdx ApplicationListener)
    (com.badlogic.gdx.backends.lwjgl LwjglApplication)))
 
 ;; Not sure where this goes yet.
@@ -14,19 +14,30 @@
 (def test-scene
   {:entities
    {:player {:health 100
-             :position [0.0 0.0 0.0]
+             :position [0 0 0]
              :icon :character-horn-girl
              :speed 5
              :player nil
-             :bugger nil}
+             :bugger nil
+             :id :player}
     :bugger1 {:health 50
               :position [5 5 0]
-              :bugger nil}
-    :rock1 {:position [6 6 0]}}})
+              :bugger nil
+              :icon :enemy-bug
+              :id :bugger1}
+    :food1 {:position [-5 -5 0]
+            :icon :gem-blue
+            :food :blue
+            :id :food1}
+    :food2 {:position [0 -5 0]
+            :icon :gem-green
+            :food :green
+            :id :food2}}})
 
 (def test-systems
-  [(terrain-system)])
-
+  [(terrain-system)
+   (player-movement-system)
+   (cursor-tile-system)])
 
 ;; SCENE
 ;; =====
@@ -52,34 +63,12 @@
   (pause [_] nil)
   (resize [_ w h] nil)
   (render [_]
-
-    ;; Input Handling (not sure if it has to be in here yet)
-    (let [forward (.isKeyPressed Gdx/input Input$Keys/W)
-          backward (.isKeyPressed Gdx/input Input$Keys/S)
-          left (.isKeyPressed Gdx/input Input$Keys/A)
-          right (.isKeyPressed Gdx/input Input$Keys/D)
-          delta (.getDeltaTime Gdx/graphics)
-          player-direction (cond->> [0 0 0]
-                                    forward (map + [0 1 0])
-                                    backward (map + [0 -1 0])
-                                    left (map + [-1 0 0])
-                                    right (map + [1 0 0]))
-          player-motion (map (partial * delta)
-                             player-direction)]
-      (swap! gamestate
-             (fn [w]
-               (let [pos (get-in w [:entities :player :position])
-                     speed (get-in w [:entities :player :speed])]
-                 (assoc-in w [:entities :player :position]
-                           (map + pos (map (partial * speed) player-motion)))))))
-
     ;; Run Systems!
     (doseq [s @systems]
       (swap! gamestate (partial sys/run s)))
 
     ;; Draw!
-    (r/render @renderer @gamestate)
-   )
+    (r/render @renderer @gamestate))
   (dispose [_] nil))
 
 (defn app-listener
