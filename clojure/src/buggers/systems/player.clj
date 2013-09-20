@@ -51,6 +51,8 @@
          hungry-folk)))))
 
 ;; This just needs a "closest-to" fn in world
+;; It also probably needs a better way to determine what is clicked.
+;; This will mean opengl shits which is sort of a bummer.
 (defn click-to-eat-system
   "Eats food if you click it and are less than 1 tile away."
   []
@@ -68,4 +70,3 @@
                  (< (w/magnitude (map - target-position player-pos)) 1))
           (w/eat world player click-target)
           world)))))
-        

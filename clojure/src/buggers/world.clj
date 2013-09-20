@@ -3,6 +3,8 @@
             [clojure.math.numeric-tower :refer :all])
   (:import  (com.badlogic.gdx Gdx)))
 
+;; This namespace really needs a huge bucket of unit tests.
+
 (def hunger-decay 0.1)
 
 ;; Helpers
@@ -15,7 +17,9 @@
   (cond
    (map? entity) entity
    (keyword? entity) (get-in world [:entities entity])
-   :else (throw (Throwable. "Error: entity must be the entities component map or id"))))
+   :else (throw
+          (Throwable.
+           "Error: entity must be the entities component map or id"))))
 
 (defn- delta-time
   []
@@ -122,8 +126,6 @@
   [world entity]
   (let [e (resolve-entity world entity)
         ents (:entities world)]
-    (println ents)
-    (println (dissoc ents (:id e)))
     (assoc world :entities (dissoc ents (:id e)))))
 
 ;; Entitiy related.
@@ -141,7 +143,8 @@
   [world ent]
   (let [e (resolve-entity world ent)
         old-hunger (:hunger e)]
-    (set-component world e :hunger (- old-hunger (* (delta-time) hunger-decay)))))
+    (set-component world e :hunger
+                   (- old-hunger (* (delta-time) hunger-decay)))))
 
 (defn eat
   "Eats a food"
