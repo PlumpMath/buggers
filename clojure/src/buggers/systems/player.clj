@@ -31,8 +31,41 @@
   []
   (reify GameSystem
     (run [_ world]
-      (let [mouse-pos (w/get-mouse-position-z0 world)]
-        (-> world
-            (w/remove-entity :mouse-loc)
-            (w/create-entity :mouse-loc {:position (map m/round mouse-pos)
-                                         :icon :selector}))))))
+      (let [mouse-pos (w/get-mouse-position-z0 world)
+            mouse-loc-guy (w/get-entity world :mouse-loc)
+            pos (map m/round mouse-pos)]
+        (if mouse-loc-guy
+          (w/set-component world :mouse-loc :position pos)
+          (w/create-entity world :mouse-loc {:position pos
+                                             :icon :selector}))))))
+
+(defn health-decay-system
+  "Health Decays"
+  []
+  (reify GameSystem
+    (run [_ world]
+      (let [hungry-folk (w/get-with-components world :hunger)]
+        (reduce
+         (fn [w [id comps]] (w/decay-hunger w id))
+         world
+         hungry-folk)))))
+
+;; This just needs a "closest-to" fn in world
+(defn click-to-eat-system
+  "Eats food if you click it and are less than 1 tile away."
+  []
+  (reify GameSystem
+    (run [_ world]
+      (let [mouse-pos (w/get-mouse-position-z0 world)
+            click-target (second (first (filter
+                                         (fn [[id comps]] (contains? comps :food))
+                                         (w/get-in-same-tile world mouse-pos)))) ;; Not really good...
+            target-position (:position click-target)
+            player (w/get-player world)
+            player-pos (:position player)]
+        (if (and click-target
+                 (.justTouched Gdx/input)
+                 (< (w/magnitude (map - target-position player-pos)) 1))
+          (w/eat world player click-target)
+          world)))))
+        

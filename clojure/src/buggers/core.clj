@@ -2,7 +2,7 @@
   (:require
    [buggers.systems :as sys]
    [buggers.systems.terrain :refer [terrain-system]]
-   [buggers.systems.player :refer [player-movement-system cursor-tile-system]]
+   [buggers.systems.player :refer [player-movement-system cursor-tile-system health-decay-system click-to-eat-system]]
    [buggers.render :as r])
   (:gen-class)
   (:import
@@ -19,8 +19,10 @@
              :speed 5
              :player nil
              :bugger nil
+             :hunger 150
              :id :player}
     :bugger1 {:health 50
+              :hunger 150
               :position [5 5 0]
               :bugger nil
               :icon :enemy-bug
@@ -37,7 +39,9 @@
 (def test-systems
   [(terrain-system)
    (player-movement-system)
-   (cursor-tile-system)])
+   (cursor-tile-system)
+   (health-decay-system)
+   (click-to-eat-system)])
 
 ;; SCENE
 ;; =====
