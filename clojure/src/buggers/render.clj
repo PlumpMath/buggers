@@ -14,7 +14,7 @@
 ;; Load textures.
 (defn get-texture-locations []
   (let [get-frames #(get % "frames")]
-    (->> (clojure.java.io/resource "planetcute/planetcute.json")
+    (->> (clojure.java.io/resource "planetcute/planetcutecorrect.json")
          slurp
          json/read-str
          get-frames
@@ -40,7 +40,7 @@
   []
   (let [planetcute-file (FileHandle.
                          (clojure.java.io/file
-                          (clojure.java.io/resource "planetcute/planetcute.png")))
+                          (clojure.java.io/resource "planetcute/planetcutecorrect.png")))
         texture (Texture. planetcute-file)]
     (into {}
           (map
@@ -99,7 +99,7 @@
                 {:keys [region w h]} ((:icon comps) textures)
                 [dx dy] (draw-position screen-width screen-height center [x y z] w h)]
             (.draw sprite-batch
-                   region (float dx) (float dy)))))
+                   region (float dx) (float (+ dy 40))))))   ;+ 40 for sprites
 
       (.end sprite-batch)
       )))
