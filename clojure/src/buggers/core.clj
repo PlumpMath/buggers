@@ -26,11 +26,11 @@
               :icon :enemy-bug
               :id :bugger1}
     :food1 {:position [-5 -5 0]
-            :icon :gem-blue
-            :food :blue
+            :icon :tree-short
+            :food :yellow
             :id :food1}
     :food2 {:position [0 -5 0]
-            :icon :gem-green
+            :icon :tree-short
             :food :green
             :id :food2}}})
 

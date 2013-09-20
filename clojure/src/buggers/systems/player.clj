@@ -1,7 +1,8 @@
 (ns buggers.systems.player
   (:require [buggers.systems :refer [GameSystem]]
             [buggers.world :as w]
-            [buggers.coordinates :as c])
+            [buggers.coordinates :as c]
+            [clojure.math.numeric-tower :as m])
   (:import  (com.badlogic.gdx Gdx)
             (com.badlogic.gdx Input$Keys)))
 
@@ -33,5 +34,5 @@
       (let [mouse-pos (w/get-mouse-position-z0 world)]
         (-> world
             (w/remove-entity :mouse-loc)
-            (w/create-entity :mouse-loc {:position mouse-pos
+            (w/create-entity :mouse-loc {:position (map m/round mouse-pos)
                                          :icon :selector}))))))
