@@ -44,7 +44,9 @@
         texture (Texture. planetcute-file)]
     (into {}
           (map
-           (fn [[k v]] (vector k (apply texture-region texture v)))
+           (fn [[k v]] (vector k {:region (apply texture-region texture v)
+                                 :w (nth v 2)
+                                 :h (nth v 3)}))
            (get-texture-locations)))))
 
 (defn draw-position
@@ -85,19 +87,19 @@
       ;; Draw Visable Terrain 
       (doseq [y (reverse range-y)
               x range-x]
-        (let [terrain-type (get-in world [:terrain [x y]])
-              [x y] (draw-position screen-width screen-height center [x y 0] 100 120)]
-          (when terrain-type
-            (.draw sprite-batch (terrain-type textures) (float x) (float y)))))
+        (when-let [terrain-type (get-in world [:terrain [x y]])]
+          (let [{:keys [region w h]} (terrain-type textures)
+                [x y] (draw-position screen-width screen-height center [x y 0] w h)]
+            (.draw sprite-batch region (float x) (float y)))))
 
       ;; Draw Entities with Icons
       (let [icon-ents (w/get-with-components world :icon :position)]
         (doseq [[id comps] icon-ents]
           (let [[x y z] (:position comps)
-                [dx dy] (draw-position screen-width screen-height center [x y z] 77 91);; Assuming size of icon, prlly bad.
-                texture ((:icon comps) textures)]
+                {:keys [region w h]} ((:icon comps) textures)
+                [dx dy] (draw-position screen-width screen-height center [x y z] w h)]
             (.draw sprite-batch
-                   texture (float dx) (float dy)))))
+                   region (float dx) (float dy)))))
 
       (.end sprite-batch)
       )))
