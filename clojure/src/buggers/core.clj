@@ -34,7 +34,15 @@
     :food2 {:position [0 -5 0]
             :icon :tree-short
             :food :green
-            :id :food2}}})
+            :id :food2}
+    :tree1 {:position [0 3 0]
+            :icon :tree-tall
+            :id :tree1
+            :tree nil}
+    :tree2 {:position [3 3 0]
+            :icon :tree-tall
+            :id :tree2
+            :tree nil}}})
 
 (def test-systems
   [(terrain-system)
